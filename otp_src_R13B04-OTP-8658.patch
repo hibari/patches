@@ -1,0 +1,423 @@
+diff --git ./otp_src_R13B04/erts/emulator/beam/erl_threads.h ./otp_src_R13B04/erts/emulator/beam/erl_threads.h
+index d635916..21f85bd 100644
+--- ./otp_src_R13B04/erts/emulator/beam/erl_threads.h
++++ ./otp_src_R13B04/erts/emulator/beam/erl_threads.h
+@@ -1,19 +1,19 @@
+ /*
+  * %CopyrightBegin%
+- * 
+- * Copyright Ericsson AB 2001-2009. All Rights Reserved.
+- * 
++ *
++ * Copyright Ericsson AB 2001-2010. All Rights Reserved.
++ *
+  * The contents of this file are subject to the Erlang Public License,
+  * Version 1.1, (the "License"); you may not use this file except in
+  * compliance with the License. You should have received a copy of the
+  * Erlang Public License along with this software. If not, it can be
+  * retrieved online at http://www.erlang.org/.
+- * 
++ *
+  * Software distributed under the License is distributed on an "AS IS"
+  * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
+  * the License for the specific language governing rights and limitations
+  * under the License.
+- * 
++ *
+  * %CopyrightEnd%
+  */
+ 
+@@ -34,6 +34,8 @@
+ #include "erl_lock_count.h"
+ #include "erl_term.h"
+ 
++#define ERTS_THR_MEMORY_BARRIER ETHR_MEMORY_BARRIER
++
+ #ifdef ERTS_ENABLE_LOCK_COUNT
+ #define erts_mtx_lock(L) erts_mtx_lock_x(L, __FILE__, __LINE__)
+ #define erts_spin_lock(L) erts_spin_lock_x(L, __FILE__, __LINE__)
+@@ -122,6 +124,8 @@ __decl_noreturn void  __noreturn erts_thr_fatal_error(int, char *);
+ 
+ #else /* #ifdef USE_THREADS */
+ 
++#define ERTS_THR_MEMORY_BARRIER
++
+ #define ERTS_THR_OPTS_DEFAULT_INITER 0
+ typedef int erts_thr_opts_t;
+ typedef int erts_thr_init_data_t;
+diff --git ./otp_src_R13B04/erts/emulator/sys/common/erl_poll.c ./otp_src_R13B04/erts/emulator/sys/common/erl_poll.c
+index d268547..09fb633 100644
+--- ./otp_src_R13B04/erts/emulator/sys/common/erl_poll.c
++++ ./otp_src_R13B04/erts/emulator/sys/common/erl_poll.c
+@@ -130,13 +130,18 @@
+ #define ERTS_POLLSET_IS_POLLED(PS) \
+   ((int) erts_smp_atomic_read(&(PS)->polled))
+ 
+-#define ERTS_POLLSET_SET_POLLER_WOKEN_CHK(PS) \
+-  ((int) erts_smp_atomic_xchg(&(PS)->woken, (long) 1))
+-#define ERTS_POLLSET_SET_POLLER_WOKEN(PS) \
+-  erts_smp_atomic_set(&(PS)->woken, (long) 1)
+-#define ERTS_POLLSET_UNSET_POLLER_WOKEN(PS) \
+-  erts_smp_atomic_set(&(PS)->woken, (long) 0)
+-#define ERTS_POLLSET_IS_POLLER_WOKEN(PS) \
++#define ERTS_POLLSET_SET_POLLER_WOKEN_CHK(PS) set_poller_woken_chk((PS))
++#define ERTS_POLLSET_SET_POLLER_WOKEN(PS) 				\
++do {									\
++      ERTS_THR_MEMORY_BARRIER;						\
++      erts_smp_atomic_set(&(PS)->woken, (long) 1);			\
++} while (0)
++#define ERTS_POLLSET_UNSET_POLLER_WOKEN(PS)				\
++do {									\
++    erts_smp_atomic_set(&(PS)->woken, (long) 0);			\
++    ERTS_THR_MEMORY_BARRIER;						\
++} while (0)
++#define ERTS_POLLSET_IS_POLLER_WOKEN(PS)				\
+   ((int) erts_smp_atomic_read(&(PS)->woken))
+ 
+ #else
+@@ -194,13 +199,18 @@
+ 
+ #else
+ 
+-#define ERTS_POLLSET_UNSET_INTERRUPTED_CHK(PS) \
+-  ((int) erts_smp_atomic_xchg(&(PS)->interrupt, (long) 0))
+-#define ERTS_POLLSET_UNSET_INTERRUPTED(PS) \
+-  erts_smp_atomic_set(&(PS)->interrupt, (long) 0)
+-#define ERTS_POLLSET_SET_INTERRUPTED(PS) \
+-  erts_smp_atomic_set(&(PS)->interrupt, (long) 1)
+-#define ERTS_POLLSET_IS_INTERRUPTED(PS) \
++#define ERTS_POLLSET_UNSET_INTERRUPTED_CHK(PS) unset_interrupted_chk((PS))
++#define ERTS_POLLSET_UNSET_INTERRUPTED(PS)				\
++do {									\
++    erts_smp_atomic_set(&(PS)->interrupt, (long) 0);			\
++    ERTS_THR_MEMORY_BARRIER;						\
++} while (0)
++#define ERTS_POLLSET_SET_INTERRUPTED(PS) 				\
++do {									\
++      ERTS_THR_MEMORY_BARRIER;						\
++      erts_smp_atomic_set(&(PS)->interrupt, (long) 1);			\
++} while (0)
++#define ERTS_POLLSET_IS_INTERRUPTED(PS)					\
+   ((int) erts_smp_atomic_read(&(PS)->interrupt))
+ 
+ #endif
+@@ -336,16 +346,30 @@ struct ErtsPollSet_ {
+ #endif
+ };
+ 
+-#if ERTS_POLL_ASYNC_INTERRUPT_SUPPORT && !defined(ERTS_SMP)
+-
+ static ERTS_INLINE int
+ unset_interrupted_chk(ErtsPollSet ps)
+ {
++    int res;
++#if ERTS_POLL_ASYNC_INTERRUPT_SUPPORT && !defined(ERTS_SMP)
+     /* This operation isn't atomic, but we have no need at all for an
+        atomic operation here... */
+-    int res = ps->interrupt;
++    res = ps->interrupt;
+     ps->interrupt = 0;
++#else
++    res = (int) erts_smp_atomic_xchg(&ps->interrupt, (long) 0);
++    ERTS_THR_MEMORY_BARRIER;
++#endif
+     return res;
++
++}
++
++#ifdef ERTS_SMP
++
++static ERTS_INLINE int
++set_poller_woken_chk(ErtsPollSet ps)
++{
++    ERTS_THR_MEMORY_BARRIER;
++    return (int) erts_smp_atomic_xchg(&ps->woken, (long) 1);
+ }
+ 
+ #endif
+diff --git ./otp_src_R13B04/erts/emulator/sys/win32/erl_poll.c ./otp_src_R13B04/erts/emulator/sys/win32/erl_poll.c
+index d816cc2..a766fe9 100644
+--- ./otp_src_R13B04/erts/emulator/sys/win32/erl_poll.c
++++ ./otp_src_R13B04/erts/emulator/sys/win32/erl_poll.c
+@@ -1,19 +1,19 @@
+ /*
+  * %CopyrightBegin%
+- * 
+- * Copyright Ericsson AB 2007-2009. All Rights Reserved.
+- * 
++ *
++ * Copyright Ericsson AB 2007-2010. All Rights Reserved.
++ *
+  * The contents of this file are subject to the Erlang Public License,
+  * Version 1.1, (the "License"); you may not use this file except in
+  * compliance with the License. You should have received a copy of the
+  * Erlang Public License along with this software. If not, it can be
+  * retrieved online at http://www.erlang.org/.
+- * 
++ *
+  * Software distributed under the License is distributed on an "AS IS"
+  * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
+  * the License for the specific language governing rights and limitations
+  * under the License.
+- * 
++ *
+  * %CopyrightEnd%
+  */
+ #ifdef HAVE_CONFIG_H
+@@ -304,24 +304,51 @@ struct ErtsPollSet_ {
+   erts_smp_atomic_set(&(PS)->polled, (long) 0)
+ #define ERTS_POLLSET_IS_POLLED(PS) \
+   ((int) erts_smp_atomic_read(&(PS)->polled))
+-#define ERTS_POLLSET_SET_POLLER_WOKEN_CHK(PS) \
+-  ((int) erts_smp_atomic_xchg(&(PS)->woken, (long) 1))
+-#define ERTS_POLLSET_SET_POLLER_WOKEN(PS) \
+-  erts_smp_atomic_set(&(PS)->woken, (long) 1)
+-#define ERTS_POLLSET_UNSET_POLLER_WOKEN(PS) \
+-  erts_smp_atomic_set(&(PS)->woken, (long) 0)
+-#define ERTS_POLLSET_IS_POLLER_WOKEN(PS) \
++
++#define ERTS_POLLSET_SET_POLLER_WOKEN_CHK(PS) set_poller_woken_chk((PS))
++#define ERTS_POLLSET_SET_POLLER_WOKEN(PS) 				\
++do {									\
++      ERTS_THR_MEMORY_BARRIER;						\
++      erts_smp_atomic_set(&(PS)->woken, (long) 1);			\
++} while (0)
++#define ERTS_POLLSET_UNSET_POLLER_WOKEN(PS)				\
++do {									\
++    erts_smp_atomic_set(&(PS)->woken, (long) 0);			\
++    ERTS_THR_MEMORY_BARRIER;						\
++} while (0)
++#define ERTS_POLLSET_IS_POLLER_WOKEN(PS)				\
+   ((int) erts_smp_atomic_read(&(PS)->woken))
+ 
+-#define ERTS_POLLSET_UNSET_INTERRUPTED_CHK(PS) \
+-  ((int) erts_smp_atomic_xchg(&(PS)->interrupt, (long) 0))
+-#define ERTS_POLLSET_UNSET_INTERRUPTED(PS) \
+-  erts_smp_atomic_set(&(PS)->interrupt, (long) 0)
+-#define ERTS_POLLSET_SET_INTERRUPTED(PS) \
+-  erts_smp_atomic_set(&(PS)->interrupt, (long) 1)
+-#define ERTS_POLLSET_IS_INTERRUPTED(PS) \
++#define ERTS_POLLSET_UNSET_INTERRUPTED_CHK(PS) unset_interrupted_chk((PS))
++#define ERTS_POLLSET_UNSET_INTERRUPTED(PS)				\
++do {									\
++    erts_smp_atomic_set(&(PS)->interrupt, (long) 0);			\
++    ERTS_THR_MEMORY_BARRIER;						\
++} while (0)
++#define ERTS_POLLSET_SET_INTERRUPTED(PS) 				\
++do {									\
++      ERTS_THR_MEMORY_BARRIER;						\
++      erts_smp_atomic_set(&(PS)->interrupt, (long) 1);			\
++} while (0)
++#define ERTS_POLLSET_IS_INTERRUPTED(PS)					\
+   ((int) erts_smp_atomic_read(&(PS)->interrupt))
+ 
++static ERTS_INLINE int
++unset_interrupted_chk(ErtsPollSet ps)
++{
++    int res = (int) erts_smp_atomic_xchg(&ps->interrupt, (long) 0);
++    ERTS_THR_MEMORY_BARRIER;
++    return res;
++
++}
++
++static ERTS_INLINE int
++set_poller_woken_chk(ErtsPollSet ps)
++{
++    ERTS_THR_MEMORY_BARRIER;
++    return (int) erts_smp_atomic_xchg(&ps->woken, (long) 1);
++}
++
+ #else
+ 
+ #define ERTS_POLLSET_LOCK(PS)
+diff --git ./otp_src_R13B04/erts/include/internal/ethread.h ./otp_src_R13B04/erts/include/internal/ethread.h
+index 934a79c..564f8f0 100644
+--- ./otp_src_R13B04/erts/include/internal/ethread.h
++++ ./otp_src_R13B04/erts/include/internal/ethread.h
+@@ -1,19 +1,19 @@
+ /*
+  * %CopyrightBegin%
+- * 
+- * Copyright Ericsson AB 2004-2009. All Rights Reserved.
+- * 
++ *
++ * Copyright Ericsson AB 2004-2010. All Rights Reserved.
++ *
+  * The contents of this file are subject to the Erlang Public License,
+  * Version 1.1, (the "License"); you may not use this file except in
+  * compliance with the License. You should have received a copy of the
+  * Erlang Public License along with this software. If not, it can be
+  * retrieved online at http://www.erlang.org/.
+- * 
++ *
+  * Software distributed under the License is distributed on an "AS IS"
+  * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
+  * the License for the specific language governing rights and limitations
+  * under the License.
+- * 
++ *
+  * %CopyrightEnd%
+  */
+ 
+@@ -375,6 +375,12 @@ ETHR_INLINE_FUNC_NAME_(ethr_mutex_unlock)(ethr_mutex *mtx)
+ #define ETHR_HAVE_OPTIMIZED_ATOMIC_OPS 1
+ #define ETHR_HAVE_OPTIMIZED_LOCKS 1
+ 
++#define ETHR_MEMORY_BARRIER \
++do { \
++    volatile LONG x___ = 0; \
++    (void) _InterlockedCompareExchange(&x___, (LONG) 1, (LONG) 0); \
++} while (0)
++
+ typedef struct {
+     volatile LONG value;
+ } ethr_atomic_t;
+@@ -1124,6 +1130,12 @@ ETHR_INLINE_FUNC_NAME_(ethr_write_lock)(ethr_rwlock_t *lock)
+  */
+ #ifndef ETHR_HAVE_OPTIMIZED_ATOMIC_OPS
+ 
++/*
++ * ETHR_MEMORY_BARRIER orders between locked and atomic accesses only,
++ * i.e. when this atomic fallback is used a noop is sufficient.
++ */
++#define ETHR_MEMORY_BARRIER
++
+ #define ETHR_ATOMIC_ADDR_BITS 4
+ #define ETHR_ATOMIC_ADDR_SHIFT 3
+ 
+diff --git ./otp_src_R13B04/erts/include/internal/i386/atomic.h ./otp_src_R13B04/erts/include/internal/i386/atomic.h
+index 3291ad3..90b4c5f 100644
+--- ./otp_src_R13B04/erts/include/internal/i386/atomic.h
++++ ./otp_src_R13B04/erts/include/internal/i386/atomic.h
+@@ -1,19 +1,19 @@
+ /*
+  * %CopyrightBegin%
+- * 
+- * Copyright Ericsson AB 2005-2009. All Rights Reserved.
+- * 
++ *
++ * Copyright Ericsson AB 2005-2010. All Rights Reserved.
++ *
+  * The contents of this file are subject to the Erlang Public License,
+  * Version 1.1, (the "License"); you may not use this file except in
+  * compliance with the License. You should have received a copy of the
+  * Erlang Public License along with this software. If not, it can be
+  * retrieved online at http://www.erlang.org/.
+- * 
++ *
+  * Software distributed under the License is distributed on an "AS IS"
+  * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
+  * the License for the specific language governing rights and limitations
+  * under the License.
+- * 
++ *
+  * %CopyrightEnd%
+  */
+ 
+@@ -32,6 +32,16 @@ typedef struct {
+     volatile long counter;
+ } ethr_native_atomic_t;
+ 
++#ifdef __x86_64__
++#define ETHR_MEMORY_BARRIER __asm__ __volatile__("mfence" : : : "memory")
++#else
++#define ETHR_MEMORY_BARRIER \
++do { \
++    volatile long x___ = 0; \
++    __asm__ __volatile__("lock; incl %0" : "=m"(x___) : "m"(x___) : "memory"); \
++} while (0)
++#endif
++
+ #ifdef ETHR_TRY_INLINE_FUNCS
+ 
+ #ifdef __x86_64__
+diff --git ./otp_src_R13B04/erts/include/internal/ppc32/atomic.h ./otp_src_R13B04/erts/include/internal/ppc32/atomic.h
+index fa701c6..105d874 100644
+--- ./otp_src_R13B04/erts/include/internal/ppc32/atomic.h
++++ ./otp_src_R13B04/erts/include/internal/ppc32/atomic.h
+@@ -1,19 +1,19 @@
+ /*
+  * %CopyrightBegin%
+- * 
+- * Copyright Ericsson AB 2005-2009. All Rights Reserved.
+- * 
++ *
++ * Copyright Ericsson AB 2005-2010. All Rights Reserved.
++ *
+  * The contents of this file are subject to the Erlang Public License,
+  * Version 1.1, (the "License"); you may not use this file except in
+  * compliance with the License. You should have received a copy of the
+  * Erlang Public License along with this software. If not, it can be
+  * retrieved online at http://www.erlang.org/.
+- * 
++ *
+  * Software distributed under the License is distributed on an "AS IS"
+  * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
+  * the License for the specific language governing rights and limitations
+  * under the License.
+- * 
++ *
+  * %CopyrightEnd%
+  */
+ 
+@@ -32,6 +32,7 @@ typedef struct {
+     volatile int counter;
+ } ethr_native_atomic_t;
+ 
++#define ETHR_MEMORY_BARRIER __asm__ __volatile__("sync" : : : "memory")
+ 
+ #ifdef ETHR_TRY_INLINE_FUNCS
+ 
+diff --git ./otp_src_R13B04/erts/include/internal/sparc32/atomic.h ./otp_src_R13B04/erts/include/internal/sparc32/atomic.h
+index d6fdc6b..8fde449 100644
+--- ./otp_src_R13B04/erts/include/internal/sparc32/atomic.h
++++ ./otp_src_R13B04/erts/include/internal/sparc32/atomic.h
+@@ -1,19 +1,19 @@
+ /* 
+  * %CopyrightBegin%
+- * 
+- * Copyright Ericsson AB 2005-2009. All Rights Reserved.
+- * 
++ *
++ * Copyright Ericsson AB 2005-2010. All Rights Reserved.
++ *
+  * The contents of this file are subject to the Erlang Public License,
+  * Version 1.1, (the "License"); you may not use this file except in
+  * compliance with the License. You should have received a copy of the
+  * Erlang Public License along with this software. If not, it can be
+  * retrieved online at http://www.erlang.org/.
+- * 
++ *
+  * Software distributed under the License is distributed on an "AS IS"
+  * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
+  * the License for the specific language governing rights and limitations
+  * under the License.
+- * 
++ *
+  * %CopyrightEnd%
+  */
+ 
+@@ -28,6 +28,10 @@ typedef struct {
+     volatile long counter;
+ } ethr_native_atomic_t;
+ 
++#define ETHR_MEMORY_BARRIER \
++  __asm__ __volatile__("membar #LoadLoad|#LoadStore|#StoreLoad|#StoreStore\n" \
++                       : : : "memory")
++
+ #ifdef ETHR_TRY_INLINE_FUNCS
+ 
+ #if defined(__arch64__)
+diff --git ./otp_src_R13B04/erts/include/internal/tile/atomic.h ./otp_src_R13B04/erts/include/internal/tile/atomic.h
+index 59a9250..5e4c7ac 100644
+--- ./otp_src_R13B04/erts/include/internal/tile/atomic.h
++++ ./otp_src_R13B04/erts/include/internal/tile/atomic.h
+@@ -32,6 +32,8 @@ typedef struct {
+     volatile long counter;
+ } ethr_native_atomic_t;
+ 
++#define ETHR_MEMORY_BARRIER __insn_mf()
++
+ #ifdef ETHR_TRY_INLINE_FUNCS
+ 
+ static ETHR_INLINE void

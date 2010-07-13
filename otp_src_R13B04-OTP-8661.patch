@@ -1,0 +1,192 @@
+diff --git ./otp_src_R13B04/erts/aclocal.m4 ./otp_src_R13B04/erts/aclocal.m4
+index 6a92fa5..61244c7 100644
+--- ./otp_src_R13B04/erts/aclocal.m4
++++ ./otp_src_R13B04/erts/aclocal.m4
+@@ -512,6 +512,8 @@ dnl
+ AC_DEFUN(LM_CHECK_THR_LIB,
+ [
+ 
++NEED_NPTL_PTHREAD_H=no
++
+ dnl win32?
+ AC_MSG_CHECKING([for native win32 threads])
+ if test "X$host_os" = "Xwin32"; then
+@@ -585,7 +587,9 @@ dnl On ofs1 the '-pthread' switch should be used
+ 		fi
+ 		if test $nptl = yes; then
+ 		    need_nptl_incldir=no
+-		    AC_CHECK_HEADER(nptl/pthread.h, need_nptl_incldir=yes)
++		    AC_CHECK_HEADER(nptl/pthread.h,
++				    [need_nptl_incldir=yes
++				     NEED_NPTL_PTHREAD_H=yes])
+ 		    if test $need_nptl_incldir = yes; then
+ 			# Ahh...
+ 			nptl_path="$C_INCLUDE_PATH:$CPATH"
+@@ -799,6 +803,11 @@ case "$THR_LIB_NAME" in
+ 			AC_DEFINE(ETHR_HAVE_MIT_PTHREAD_H, 1, \
+ [Define if the pthread.h header file is in pthread/mit directory.]))
+ 
++	if test $NEED_NPTL_PTHREAD_H = yes; then
++	    AC_DEFINE(ETHR_NEED_NPTL_PTHREAD_H, 1, \
++[Define if you need the <nptl/pthread.h> header file.])
++	fi
++
+ 	AC_CHECK_HEADER(sys/time.h, \
+ 			AC_DEFINE(ETHR_HAVE_SYS_TIME_H, 1, \
+ [Define if you have the <sys/time.h> header file.]))
+@@ -826,19 +835,49 @@ case "$THR_LIB_NAME" in
+ 	AC_CHECK_FUNC(pthread_spin_lock, \
+ 			AC_DEFINE(ETHR_HAVE_PTHREAD_SPIN_LOCK, 1, \
+ [Define if you have the pthread_spin_lock function.]))
+-	test "$force_linux_pthread_rwlocks" = "yes" || {
+-	    force_linux_pthread_rwlocks=no
+-	}
+-	case "$force_linux_pthread_rwlocks-$host_os" in
+-		no-linux*) # Writers may get starved
+-			# TODO: write a test that tests the implementation
+-			;;
+-		*)
+-			AC_CHECK_FUNC(pthread_rwlock_init, \
+-				AC_DEFINE(ETHR_HAVE_PTHREAD_RWLOCK_INIT, 1, \
+-[Define if you have a pthread_rwlock implementation that can be used.]))
+-			;;
+-	esac
++
++	have_pthread_rwlock_init=no
++	AC_CHECK_FUNC(pthread_rwlock_init, [have_pthread_rwlock_init=yes])
++	if test $have_pthread_rwlock_init = yes; then
++
++	    AC_DEFINE(ETHR_HAVE_PTHREAD_RWLOCK_INIT, 1, \
++[Define if you have a pthread_rwlock implementation that can be used.])
++
++	    ethr_have_pthread_rwlockattr_setkind_np=no
++	    AC_CHECK_FUNC(pthread_rwlockattr_setkind_np,
++			  [ethr_have_pthread_rwlockattr_setkind_np=yes])
++
++	    if test $ethr_have_pthread_rwlockattr_setkind_np = yes; then
++		AC_DEFINE(ETHR_HAVE_PTHREAD_RWLOCKATTR_SETKIND_NP, 1, \
++[Define if you have the pthread_rwlockattr_setkind_np() function.])
++
++		AC_MSG_CHECKING([for PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP])
++		ethr_pthread_rwlock_writer_nonrecursive_initializer_np=no
++		AC_TRY_LINK([
++				#if defined(ETHR_NEED_NPTL_PTHREAD_H)
++				#include <nptl/pthread.h>
++				#elif defined(ETHR_HAVE_MIT_PTHREAD_H)
++				#include <pthread/mit/pthread.h>
++				#elif defined(ETHR_HAVE_PTHREAD_H)
++				#include <pthread.h>
++				#endif
++			    ],
++			    [
++				pthread_rwlockattr_t *attr;
++				return pthread_rwlockattr_setkind_np(attr,
++				    PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
++			    ],
++			    [ethr_pthread_rwlock_writer_nonrecursive_initializer_np=yes])
++		AC_MSG_RESULT([$ethr_pthread_rwlock_writer_nonrecursive_initializer_np])
++		if test $ethr_pthread_rwlock_writer_nonrecursive_initializer_np = yes; then
++		    AC_DEFINE(ETHR_HAVE_PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP, 1, \
++[Define if you have the PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP rwlock attribute.])
++		fi
++	    fi
++	fi
++
++
++
+ 	AC_CHECK_FUNC(pthread_attr_setguardsize, \
+ 			AC_DEFINE(ETHR_HAVE_PTHREAD_ATTR_SETGUARDSIZE, 1, \
+ [Define if you have the pthread_attr_setguardsize function.]))
+diff --git ./otp_src_R13B04/erts/include/internal/ethread_header_config.h.in ./otp_src_R13B04/erts/include/internal/ethread_header_config.h.in
+index cf25ad3..c9fd87c 100644
+--- ./otp_src_R13B04/erts/include/internal/ethread_header_config.h.in
++++ ./otp_src_R13B04/erts/include/internal/ethread_header_config.h.in
+@@ -50,6 +50,13 @@
+ /* Define if you have a pthread_rwlock implementation that can be used */
+ #undef ETHR_HAVE_PTHREAD_RWLOCK_INIT
+ 
++/* Define if you have the pthread_rwlockattr_setkind_np() function. */
++#undef ETHR_HAVE_PTHREAD_RWLOCKATTR_SETKIND_NP
++
++/* Define if you have the PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP rwlock
++   attribute. */
++#undef ETHR_HAVE_PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP
++
+ /* Define if you want to turn on extra sanity checking in the ethread library */
+ #undef ETHR_XCHK
+ 
+diff --git ./otp_src_R13B04/erts/lib_src/common/ethread.c ./otp_src_R13B04/erts/lib_src/common/ethread.c
+index eb4d0ca..a4ec4c4 100644
+--- ./otp_src_R13B04/erts/lib_src/common/ethread.c
++++ ./otp_src_R13B04/erts/lib_src/common/ethread.c
+@@ -1,19 +1,19 @@
+ /*
+  * %CopyrightBegin%
+- * 
+- * Copyright Ericsson AB 2004-2009. All Rights Reserved.
+- * 
++ *
++ * Copyright Ericsson AB 2004-2010. All Rights Reserved.
++ *
+  * The contents of this file are subject to the Erlang Public License,
+  * Version 1.1, (the "License"); you may not use this file except in
+  * compliance with the License. You should have received a copy of the
+  * Erlang Public License along with this software. If not, it can be
+  * retrieved online at http://www.erlang.org/.
+- * 
++ *
+  * Software distributed under the License is distributed on an "AS IS"
+  * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
+  * the License for the specific language governing rights and limitations
+  * under the License.
+- * 
++ *
+  * %CopyrightEnd%
+  */
+ 
+@@ -269,6 +269,11 @@ static ethr_mutex no_ethrs_mtx;
+ #warning "Cannot enforce fork-safety"
+ #endif
+ 
++#ifdef ETHR_HAVE_PTHREAD_RWLOCK_INIT
++static pthread_rwlockattr_t write_pref_attr_data;
++static pthread_rwlockattr_t *write_pref_attr;
++#endif
++
+ /*
+  * ----------------------------------------------------------------------------
+  * Static functions
+@@ -525,6 +530,24 @@ ethr_init(ethr_init_data *id)
+     }
+ #endif
+ 
++#ifdef ETHR_HAVE_PTHREAD_RWLOCK_INIT
++#if defined(ETHR_HAVE_PTHREAD_RWLOCKATTR_SETKIND_NP) \
++    && defined(ETHR_HAVE_PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP)
++    res = pthread_rwlockattr_init(&write_pref_attr_data);
++    if (res != 0)
++	goto error;
++    res = pthread_rwlockattr_setkind_np(
++	&write_pref_attr_data,
++	PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
++    if (res != 0)
++	goto error;
++    write_pref_attr = &write_pref_attr_data;
++#else
++    write_pref_attr = NULL;
++#endif
++#endif
++
++
+     return 0;
+ 
+  error:
+@@ -1060,7 +1083,7 @@ ethr_rwmutex_init(ethr_rwmutex *rwmtx)
+     }
+     rwmtx->initialized = ETHR_RWMUTEX_INITIALIZED;
+ #endif
+-    return pthread_rwlock_init(&rwmtx->pt_rwlock, NULL);
++    return pthread_rwlock_init(&rwmtx->pt_rwlock, write_pref_attr);
+ }
+ 
+ int

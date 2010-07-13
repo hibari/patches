@@ -1,0 +1,29 @@
+--- ./otp_src_R13B04/lib/observer/src/etop_tr.erl.orig	2009-06-19 19:15:08.000000000 -0500
++++ ./otp_src_R13B04/lib/observer/src/etop_tr.erl	2009-06-19 19:15:18.000000000 -0500
+@@ -83,13 +83,13 @@
+     end,
+     nopid;
+ handle_data(_W, {drop, D}, _) ->  %% Error case we are missing data here!
+-    io:format("Erlang top dropped data ~p~n", [D]),
++    %% SLF: don't care... io:format("Erlang top dropped data ~p~n", [D]),
+     nopid;
+ handle_data(nopid, {_, _, out, _, _}, _Store) ->
+     %% ignore - there was probably just a 'drop'
+     nopid;
+ handle_data(_, G, _) ->
+-    io:format("Erlang top got garbage ~p~n", [G]),
++    %% SLF: don't care... io:format("Erlang top got garbage ~p~n", [G]),
+     nopid.
+ 
+ elapsed({Me1, S1, Mi1}, {Me2, S2, Mi2}) ->
+--- ./otp_src_R13B04/lib/observer/src/etop_txt.erl.orig	2009-06-19 19:19:47.000000000 -0500
++++ ./otp_src_R13B04/lib/observer/src/etop_txt.erl	2009-06-19 19:19:35.000000000 -0500
+@@ -29,7 +29,7 @@
+ -import(etop,[loadinfo/1,meminfo/2]).
+ -import(etop_gui,[formatmfa/1,to_list/1]).
+ 
+--define(PROCFORM,"~-15w~-20s~8w~8w~8w~8w ~-20s~n").
++-define(PROCFORM,"~-15w~-20s~8w~8w~8w~8w ~-50s~n").
+ 
+ stop(Pid) -> Pid ! stop.
+ 

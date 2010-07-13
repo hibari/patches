@@ -1,0 +1,38 @@
+*** ./otp_src_R13B04/lib/eunit/src/eunit_internal.hrl.orig	2009-12-12 21:45:42.761908692 +0900
+--- ./otp_src_R13B04/lib/eunit/src/eunit_internal.hrl	2009-12-12 21:46:09.254925218 +0900
+***************
+*** 13,19 ****
+  -define(DEFAULT_EXPORT_SUFFIX, "_exported_").
+  -define(DEFAULT_TESTMODULE_SUFFIX, "_tests").
+  -define(DEFAULT_GROUP_TIMEOUT, infinity).
+! -define(DEFAULT_TEST_TIMEOUT, 5000).
+  -define(DEFAULT_SETUP_PROCESS, spawn).
+  -define(DEFAULT_MODULE_WRAPPER_NAME, eunit_wrapper_).
+  
+--- 13,19 ----
+  -define(DEFAULT_EXPORT_SUFFIX, "_exported_").
+  -define(DEFAULT_TESTMODULE_SUFFIX, "_tests").
+  -define(DEFAULT_GROUP_TIMEOUT, infinity).
+! -define(DEFAULT_TEST_TIMEOUT, 30000).
+  -define(DEFAULT_SETUP_PROCESS, spawn).
+  -define(DEFAULT_MODULE_WRAPPER_NAME, eunit_wrapper_).
+  
+*** ./otp_src_R13B04/lib/eunit/src/eunit.erl.orig	2009-12-12 21:45:50.344908536 +0900
+--- ./otp_src_R13B04/lib/eunit/src/eunit.erl	2009-12-12 21:46:16.726929641 +0900
+***************
+*** 116,122 ****
+  
+  %% @equiv test(Tests, [])
+  test(Tests) ->
+!     test(Tests, []).
+  
+  %% @spec test(Tests::term(), Options::[term()]) -> ok | {error, term()}
+  %% @doc Runs a set of tests. The format of `Tests' is described in the
+--- 116,122 ----
+  
+  %% @equiv test(Tests, [])
+  test(Tests) ->
+!     test(Tests, [verbose]).
+  
+  %% @spec test(Tests::term(), Options::[term()]) -> ok | {error, term()}
+  %% @doc Runs a set of tests. The format of `Tests' is described in the

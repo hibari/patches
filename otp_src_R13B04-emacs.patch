@@ -1,0 +1,12 @@
+diff --git ./otp_src_R13B04/lib/tools/emacs/Makefile ./otp_src_R13B04/lib/tools/emacs/Makefile
+index 7249263..4407320 100644
+--- ./otp_src_R13B04/lib/tools/emacs/Makefile
++++ ./otp_src_R13B04/lib/tools/emacs/Makefile
+@@ -39,6 +39,7 @@ MAN_FILES= \
+ EMACS_FILES= \
+ 	erlang-start \
+ 	erlang-eunit \
++	erlang-skels \
+ 	erlang
+ 
+ README_FILES= README

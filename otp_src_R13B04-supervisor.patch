@@ -1,0 +1,20 @@
+*** ./otp_src_R13B04/lib/stdlib/src/supervisor.erl.orig		2007-06-11 21:52:46.000000000 +0900
+--- ./otp_src_R13B04/lib/stdlib/src/supervisor.erl	2007-09-19 17:57:17.000000000 +0900
+@@ -781,7 +781,7 @@
+ 
+ validName(_Name) -> true. 
+ 
+-validFunc({M, F, A}) when is_atom(M), 
++validFunc({M, F, A}) when (is_atom(M) orelse is_tuple(M)), 
+                           is_atom(F), 
+                           is_list(A) -> true;
+ validFunc(Func)                      -> throw({invalid_mfa, Func}).
+@@ -801,7 +801,7 @@
+ validMods(Mods) when is_list(Mods) ->
+     lists:foreach(fun(Mod) ->
+ 		    if
+-			is_atom(Mod) -> ok;
++			(is_atom(Mod) orelse is_tuple(Mod)) -> ok;
+ 			true -> throw({invalid_module, Mod})
+ 		    end
+ 		  end,

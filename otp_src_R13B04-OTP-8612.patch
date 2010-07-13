@@ -1,0 +1,79 @@
+diff --git ./otp_src_R13B04/erts/emulator/beam/erl_port_task.c ./otp_src_R13B04/erts/emulator/beam/erl_port_task.c
+index 0b6bb0d..967a14f 100644
+--- ./otp_src_R13B04/erts/emulator/beam/erl_port_task.c
++++ ./otp_src_R13B04/erts/emulator/beam/erl_port_task.c
+@@ -969,11 +969,11 @@ erts_port_task_execute(ErtsRunQueue *runq, Port **curr_port_pp)
+     erts_port_release(pp);
+ #else
+     {
+-	long refc = erts_smp_atomic_dectest(&pp->refc);
++	long refc;
++	erts_smp_mtx_unlock(pp->lock);
++	refc = erts_smp_atomic_dectest(&pp->refc);
+ 	ASSERT(refc >= 0);
+-	if (refc > 0)
+-	    erts_smp_mtx_unlock(pp->lock);
+-	else {
++	if (refc == 0) {
+ 	    erts_smp_runq_unlock(runq);
+ 	    erts_port_cleanup(pp); /* Might aquire runq lock */
+ 	    erts_smp_runq_lock(runq);
+diff --git ./otp_src_R13B04/erts/emulator/beam/global.h ./otp_src_R13B04/erts/emulator/beam/global.h
+index 7c3ba69..d5d6363 100644
+--- ./otp_src_R13B04/erts/emulator/beam/global.h
++++ ./otp_src_R13B04/erts/emulator/beam/global.h
+@@ -1192,12 +1192,11 @@ erts_smp_port_unlock(Port *prt)
+ {
+ #ifdef ERTS_SMP
+     long refc;
++    erts_smp_mtx_unlock(prt->lock);
+     refc = erts_smp_atomic_dectest(&prt->refc);
+     ASSERT(refc >= 0);
+     if (refc == 0)
+ 	erts_port_cleanup(prt);
+-    else
+-	erts_smp_mtx_unlock(prt->lock);
+ #endif
+ }
+ 
+diff --git ./otp_src_R13B04/erts/emulator/beam/io.c ./otp_src_R13B04/erts/emulator/beam/io.c
+index 10f1082..6862580 100644
+--- ./otp_src_R13B04/erts/emulator/beam/io.c
++++ ./otp_src_R13B04/erts/emulator/beam/io.c
+@@ -280,10 +280,36 @@ erts_test_next_port(int set, Uint next)
+     return res;
+ }
+ 
++
++static void port_cleanup(Port *prt);
++
++#ifdef ERTS_SMP
++
++static void
++sched_port_cleanup(void *vprt)
++{
++    Port *prt = (Port *) vprt;
++    erts_smp_mtx_lock(prt->lock);
++    port_cleanup(prt);
++}
++
++#endif
++
+ void
+ erts_port_cleanup(Port *prt)
+ {
+ #ifdef ERTS_SMP
++    if (erts_smp_mtx_trylock(prt->lock) == EBUSY)
++	erts_schedule_misc_op(sched_port_cleanup, (void *) prt);
++    else
++#endif
++	port_cleanup(prt);
++}
++
++void
++port_cleanup(Port *prt)
++{
++#ifdef ERTS_SMP
+     Uint32 port_specific;
+     erts_smp_mtx_t *mtx;
+ #endif

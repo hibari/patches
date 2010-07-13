@@ -1,0 +1,13 @@
+diff --git ./otp_src_R13B04/erts/lib_src/common/ethread.c ./otp_src_R13B04/erts/lib_src/common/ethread.c
+index a4ec4c4..9c88233 100644
+--- ./otp_src_R13B04/erts/lib_src/common/ethread.c
++++ ./otp_src_R13B04/erts/lib_src/common/ethread.c
+@@ -3216,7 +3216,7 @@ ethr_rwmutex_tryrlock(ethr_rwmutex *rwmtx)
+     res = ethr_mutex_trylock__(&rwmtx->mtx);
+     if (res != 0)
+ 	return res;
+-    if (!rwmtx->waiting_writers) {
++    if (rwmtx->waiting_writers) {
+ 	res = ethr_mutex_unlock__(&rwmtx->mtx);
+ 	if (res == 0)
+ 	    return EBUSY;

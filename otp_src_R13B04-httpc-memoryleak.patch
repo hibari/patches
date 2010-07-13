@@ -1,0 +1,50 @@
+--- ./otp_src_R13B04/lib/inets/src/http_client/httpc_handler.erl.orig	2010-02-20 03:07:48.000000000 +0900
++++ ./otp_src_R13B04/lib/inets/src/http_client/httpc_handler.erl	2010-03-24 11:43:53.000000000 +0900
+@@ -1407,7 +1407,7 @@
+ 	    State#state{status = close}
+     end.
+ 
+-answer_request(Request, Msg, #state{timers = Timers} = State) -> 
++answer_request(Request, Msg, #state{timers = Timers, profile_name = ProfileName} = State) -> 
+     ?hcrt("answer request", [{request, Request}]),
+     httpc_response:send(Request#request.from, Msg),
+     RequestTimers = Timers#timers.request_timers,
+@@ -1415,6 +1415,7 @@
+ 	proplists:get_value(Request#request.id, RequestTimers, undefined),
+     Timer = {Request#request.id, TimerRef},
+     cancel_timer(TimerRef, {timeout, Request#request.id}),
++    httpc_manager:request_done(Request#request.id, ProfileName),
+     State#state{request = Request#request{from = answer_sent},
+ 		timers = 
+ 		Timers#timers{request_timers =
+--- ./otp_src_R13B04/lib/inets/src/http_client/httpc_manager.erl.orig	2010-02-20 03:07:49.000000000 +0900
++++ ./otp_src_R13B04/lib/inets/src/http_client/httpc_manager.erl	2010-03-24 11:46:15.000000000 +0900
+@@ -30,6 +30,7 @@
+ 	 request/2, 
+ 	 cancel_request/2,
+ 	 request_canceled/2, 
++	 request_done/2,
+ 	 retry_request/2, 
+ 	 redirect_request/2,
+ 	 insert_session/2, 
+@@ -169,6 +170,9 @@
+ request_canceled(RequestId, ProfileName) ->
+     cast(ProfileName, {request_canceled, RequestId}).
+ 
++request_done(RequestId, ProfileName) ->
++    cast(ProfileName, {request_done, RequestId}).
++
+ 
+ %%--------------------------------------------------------------------
+ %% Function: insert_session(Session, ProfileName) -> _
+@@ -486,6 +490,10 @@
+ 	   {noreply, State}
+     end;
+ 
++handle_cast({request_done, RequestId}, State) ->
++    ets:delete(State#state.handler_db, RequestId),
++    {noreply, State};
++
+ handle_cast({set_options, Options}, State = #state{options = OldOptions}) ->
+     ?hcrv("set options", [{options, Options}, {old_options, OldOptions}]),
+     NewOptions = 

@@ -1,0 +1,11 @@
+--- ./otp_src_R13B04/erts/emulator/beam/break.c.org	2010-02-19 10:03:10.000000000 -0800
++++ ./otp_src_R13B04/erts/emulator/beam/break.c	2010-04-07 02:49:52.000000000 -0700
+@@ -327,7 +327,7 @@
+                (unsigned)(OLD_HEND(p) - OLD_HEAP(p)) );
+     erts_print(to, to_arg, "Heap unused: %bpu\n", (p->hend - p->htop));
+     erts_print(to, to_arg, "OldHeap unused: %bpu\n",
+-	       (OLD_HEAP(p) == NULL) ? 0 : (OLD_HEND(p) - OLD_HEAP(p)) );
++	       (OLD_HEAP(p) == NULL) ? 0 : (OLD_HEND(p) - OLD_HTOP(p)) );
+ 
+     if (garbing) {
+ 	print_garb_info(to, to_arg, p);

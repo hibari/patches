@@ -1,0 +1,44 @@
+--- ./otp_src_R13B04/lib/odbc/c_src/odbcserver.c	2007-12-04 21:54:25.000000000 -0600
++++ ./otp_src_R13B04/lib/odbc/c_src/odbcserver.c.after-oracleworkaround	2007-12-04 21:54:56.000000000 -0600
+@@ -207,6 +207,8 @@
+ 
+ static void init_driver(int erl_auto_commit_mode, int erl_trace_driver,
+ 			   db_state *state);
++static void init_driver_oracleworkaround(int erl_auto_commit_mode,
++                           db_state *state);
+ static void init_param_column(param_array *params, byte *buffer, int *index,
+ 			      int num_param_values, db_state* state);
+ 
+@@ -467,6 +469,8 @@
+ 	return msg;
+     }
+ 
++    init_driver_oracleworkaround(erl_auto_commit_mode, state);
++
+     msg = retrive_scrollable_cursor_support_info(state);
+   
+     return msg;
+@@ -1946,6 +1950,23 @@
+ 	DO_EXIT(EXIT_CONNECTION);
+ }
+ 
++static void init_driver_oracleworkaround(int erl_auto_commit_mode,
++                        db_state *state)
++{
++    int auto_commit_mode;
++
++    if(erl_auto_commit_mode == ON) {
++        auto_commit_mode = SQL_AUTOCOMMIT_ON;
++    } else {
++        auto_commit_mode = SQL_AUTOCOMMIT_OFF;
++    }
++
++    if(!sql_success(SQLSetConnectAttr(connection_handle(state),
++                                      SQL_ATTR_AUTOCOMMIT,
++                                      (SQLPOINTER)auto_commit_mode, 0)))
++        DO_EXIT(EXIT_CONNECTION);
++}
++
+ static void init_param_column(param_array *params, byte *buffer, int *index,
+ 			      int num_param_values, db_state* state)
+ {

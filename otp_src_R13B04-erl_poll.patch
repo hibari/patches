@@ -1,0 +1,10 @@
+--- ./otp_src_R13B04/erts/emulator/sys/common/erl_poll.c.org	2010-05-15 10:46:59.000000000 +0900
++++ ./otp_src_R13B04/erts/emulator/sys/common/erl_poll.c	2010-05-15 10:48:08.000000000 +0900
+@@ -2405,6 +2405,7 @@
+ 	while (urqbp) {
+ 	    size += sizeof(ErtsPollSetUpdateRequestsBlock);
+ 	    pending_updates += urqbp->len;
++            urqbp = urqbp->next;
+ 	}
+     }
+ #endif
