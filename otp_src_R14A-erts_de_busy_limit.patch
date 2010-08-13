@@ -1,0 +1,45 @@
+diff -ur ./otp_src_R14A.orig/erts/emulator/beam/dist.c ./otp_src_R14A/erts/emulator/beam/dist.c
+--- ./otp_src_R14A.orig/erts/emulator/beam/dist.c	2009-11-20 05:29:24.000000000 -0800
++++ ./otp_src_R14A/erts/emulator/beam/dist.c	2010-02-14 15:06:32.000000000 -0800
+@@ -97,6 +97,9 @@
+ #define PASS_THROUGH 'p'        /* This code should go */
+ 
+ int erts_is_alive; /* System must be blocked on change */
++#define ERTS_DE_BUSY_LIMIT (128*1024)
++int erts_de_busy_limit = ERTS_DE_BUSY_LIMIT;
++
+ 
+ /* distribution trap functions */
+ Export* dsend2_trap = NULL;
+@@ -1407,8 +1410,6 @@
+     return -1;
+ }
+ 
+-#define ERTS_DE_BUSY_LIMIT (128*1024)
+-
+ static int
+ dsig_send(ErtsDSigData *dsdp, Eterm ctl, Eterm msg, int force_busy)
+ {
+diff -ur ./otp_src_R14A.orig/erts/emulator/beam/erl_init.c ./otp_src_R14A/erts/emulator/beam/erl_init.c
+--- ./otp_src_R14A/erts/emulator/beam/erl_init.c	2010-06-12 00:30:02.000000000 +0900
++++ ./otp_src_R14A/erts/emulator/beam/erl_init.c	2010-08-12 10:44:02.650413613 +0900
+@@ -749,6 +749,7 @@
+     char envbuf[21]; /* enough for any 64-bit integer */
+     size_t envbufsz;
+     int async_max_threads = erts_async_max_threads;
++    extern int erts_de_busy_limit;
+ 
+     early_init(&argc, argv);
+ 
+@@ -769,6 +770,11 @@
+ 	async_max_threads = atoi(envbuf);
+     }
+ 
++    envbufsz = sizeof(envbuf);
++    if (erts_sys_getenv("ERTS_DE_BUSY_LIMIT", envbuf, &envbufsz) == 0) {
++	erts_de_busy_limit = atoi(envbuf);
++    }
++
+ #if (defined(__APPLE__) && defined(__MACH__)) || defined(__DARWIN__)
+     /*
+      * The default stack size on MacOS X is too small for pcre.
