@@ -1,5 +1,5 @@
---- ./otp_src_R14A/lib/odbc/c_src/odbcserver.c	2007-12-04 21:54:25.000000000 -0600
-+++ ./otp_src_R14A/lib/odbc/c_src/odbcserver.c.after-oracleworkaround	2007-12-04 21:54:56.000000000 -0600
+--- ./otp_src_R14B/lib/odbc/c_src/odbcserver.c	2007-12-04 21:54:25.000000000 -0600
++++ ./otp_src_R14B/lib/odbc/c_src/odbcserver.c.after-oracleworkaround	2007-12-04 21:54:56.000000000 -0600
 @@ -207,6 +207,8 @@
  
  static void init_driver(int erl_auto_commit_mode, int erl_trace_driver,

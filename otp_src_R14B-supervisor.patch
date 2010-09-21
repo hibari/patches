@@ -1,5 +1,5 @@
-*** ./otp_src_R14A/lib/stdlib/src/supervisor.erl.orig		2007-06-11 21:52:46.000000000 +0900
---- ./otp_src_R14A/lib/stdlib/src/supervisor.erl	2007-09-19 17:57:17.000000000 +0900
+*** ./otp_src_R14B/lib/stdlib/src/supervisor.erl.orig		2007-06-11 21:52:46.000000000 +0900
+--- ./otp_src_R14B/lib/stdlib/src/supervisor.erl	2007-09-19 17:57:17.000000000 +0900
 @@ -781,7 +781,7 @@
  
  validName(_Name) -> true. 

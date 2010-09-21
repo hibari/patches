@@ -1,0 +1,62 @@
+--- ./otp_src_R14B/erts/emulator/beam/dist.c.orig	2010-06-12 00:29:29.000000000 +0900
++++ ./otp_src_R14B/erts/emulator/beam/dist.c	2010-09-15 14:16:06.640554491 +0900
+@@ -97,6 +97,9 @@
+ #define PASS_THROUGH 'p'        /* This code should go */
+ 
+ int erts_is_alive; /* System must be blocked on change */
++#define ERTS_DE_BUSY_LIMIT (128*1024)
++int erts_de_busy_limit = ERTS_DE_BUSY_LIMIT;
++
+ 
+ /* distribution trap functions */
+ Export* dsend2_trap = NULL;
+@@ -1473,8 +1476,6 @@
+     return -1;
+ }
+ 
+-#define ERTS_DE_BUSY_LIMIT (128*1024)
+-
+ static int
+ dsig_send(ErtsDSigData *dsdp, Eterm ctl, Eterm msg, int force_busy)
+ {
+@@ -1560,7 +1561,7 @@
+ 	ErtsProcList *plp = NULL;
+ 	erts_smp_spin_lock(&dep->qlock);
+ 	dep->qsize += size_obuf(obuf);
+-	if (dep->qsize >= ERTS_DE_BUSY_LIMIT)
++	if (dep->qsize >= erts_de_busy_limit)
+ 	    dep->qflgs |= ERTS_DE_QFLG_BUSY;
+ 	if (!force_busy && (dep->qflgs & ERTS_DE_QFLG_BUSY)) {
+ 	    erts_smp_spin_unlock(&dep->qlock);
+@@ -1931,7 +1932,7 @@
+ 	ASSERT(dep->qsize >= obufsize);
+ 	dep->qsize -= obufsize;
+ 	obufsize = 0;
+-	if (de_busy && !prt_busy && dep->qsize < ERTS_DE_BUSY_LIMIT) {
++	if (de_busy && !prt_busy && dep->qsize < erts_de_busy_limit) {
+ 	    ErtsProcList *suspendees;
+ 	    int resumed;
+ 	    suspendees = get_suspended_on_de(dep, ERTS_DE_QFLG_BUSY);
+diff -ur ./otp_src_R14B.orig/erts/emulator/beam/erl_init.c ./otp_src_R14B/erts/emulator/beam/erl_init.c
+--- ./otp_src_R14B/erts/emulator/beam/erl_init.c	2010-06-12 00:30:02.000000000 +0900
++++ ./otp_src_R14B/erts/emulator/beam/erl_init.c	2010-08-12 10:44:02.650413613 +0900
+@@ -749,6 +749,7 @@
+     char envbuf[21]; /* enough for any 64-bit integer */
+     size_t envbufsz;
+     int async_max_threads = erts_async_max_threads;
++    extern int erts_de_busy_limit;
+ 
+     early_init(&argc, argv);
+ 
+@@ -769,6 +770,11 @@
+ 	async_max_threads = atoi(envbuf);
+     }
+ 
++    envbufsz = sizeof(envbuf);
++    if (erts_sys_getenv("ERTS_DE_BUSY_LIMIT", envbuf, &envbufsz) == 0) {
++	erts_de_busy_limit = atoi(envbuf);
++    }
++
+ #if (defined(__APPLE__) && defined(__MACH__)) || defined(__DARWIN__)
+     /*
+      * The default stack size on MacOS X is too small for pcre.

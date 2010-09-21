@@ -1,5 +1,5 @@
---- ./otp_src_R14A/lib/observer/src/etop_tr.erl.orig	2009-06-19 19:15:08.000000000 -0500
-+++ ./otp_src_R14A/lib/observer/src/etop_tr.erl	2009-06-19 19:15:18.000000000 -0500
+--- ./otp_src_R14B/lib/observer/src/etop_tr.erl.orig	2009-06-19 19:15:08.000000000 -0500
++++ ./otp_src_R14B/lib/observer/src/etop_tr.erl	2009-06-19 19:15:18.000000000 -0500
 @@ -83,13 +83,13 @@
      end,
      nopid;
@@ -16,8 +16,8 @@
      nopid.
  
  elapsed({Me1, S1, Mi1}, {Me2, S2, Mi2}) ->
---- ./otp_src_R14A/lib/observer/src/etop_txt.erl.orig	2009-06-19 19:19:47.000000000 -0500
-+++ ./otp_src_R14A/lib/observer/src/etop_txt.erl	2009-06-19 19:19:35.000000000 -0500
+--- ./otp_src_R14B/lib/observer/src/etop_txt.erl.orig	2009-06-19 19:19:47.000000000 -0500
++++ ./otp_src_R14B/lib/observer/src/etop_txt.erl	2009-06-19 19:19:35.000000000 -0500
 @@ -29,7 +29,7 @@
  -import(etop,[loadinfo/1,meminfo/2]).
  -import(etop_gui,[formatmfa/1,to_list/1]).
