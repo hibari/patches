@@ -1,6 +1,6 @@
 diff -ur ./otp_src_R13B04.orig/erts/emulator/beam/dist.c ./otp_src_R13B04/erts/emulator/beam/dist.c
---- ./otp_src_R13B04.orig/erts/emulator/beam/dist.c	2009-11-20 05:29:24.000000000 -0800
-+++ ./otp_src_R13B04/erts/emulator/beam/dist.c	2010-02-14 15:06:32.000000000 -0800
+--- ./otp_src_R13B04.orig/erts/emulator/beam/dist.c    2009-11-20 05:29:24.000000000 -0800
++++ ./otp_src_R13B04/erts/emulator/beam/dist.c 2010-02-14 15:06:32.000000000 -0800
 @@ -97,6 +97,9 @@
  #define PASS_THROUGH 'p'        /* This code should go */
  
@@ -20,10 +20,27 @@ diff -ur ./otp_src_R13B04.orig/erts/emulator/beam/dist.c ./otp_src_R13B04/erts/e
  static int
  dsig_send(ErtsDSigData *dsdp, Eterm ctl, Eterm msg, int force_busy)
  {
-diff -ur ./otp_src_R13B04.orig/erts/emulator/beam/erl_init.c ./otp_src_R13B04/erts/emulator/beam/erl_init.c
---- ./otp_src_R13B04.orig/erts/emulator/beam/erl_init.c	2009-09-18 07:07:46.000000000 -0700
-+++ ./otp_src_R13B04/erts/emulator/beam/erl_init.c	2010-02-14 16:08:33.000000000 -0800
-@@ -788,6 +788,7 @@
+@@ -1560,7 +1561,7 @@
+ 	ErtsProcList *plp = NULL;
+ 	erts_smp_spin_lock(&dep->qlock);
+ 	dep->qsize += size_obuf(obuf);
+-	if (dep->qsize >= ERTS_DE_BUSY_LIMIT)
++	if (dep->qsize >= erts_de_busy_limit)
+ 	    dep->qflgs |= ERTS_DE_QFLG_BUSY;
+ 	if (!force_busy && (dep->qflgs & ERTS_DE_QFLG_BUSY)) {
+ 	    erts_smp_spin_unlock(&dep->qlock);
+@@ -1931,7 +1932,7 @@
+ 	ASSERT(dep->qsize >= obufsize);
+ 	dep->qsize -= obufsize;
+ 	obufsize = 0;
+-	if (de_busy && !prt_busy && dep->qsize < ERTS_DE_BUSY_LIMIT) {
++	if (de_busy && !prt_busy && dep->qsize < erts_de_busy_limit) {
+ 	    ErtsProcList *suspendees;
+ 	    int resumed;
+ 	    suspendees = get_suspended_on_de(dep, ERTS_DE_QFLG_BUSY);
+--- ./otp_src_R13B04/erts/emulator/beam/erl_init.c.orig	2010-02-20 03:03:48.000000000 +0900
++++ ./otp_src_R13B04/erts/emulator/beam/erl_init.c	2010-11-05 23:47:43.830249097 +0900
+@@ -800,6 +800,7 @@
      char envbuf[21]; /* enough for any 64-bit integer */
      size_t envbufsz;
      int async_max_threads = erts_async_max_threads;
@@ -31,13 +48,14 @@ diff -ur ./otp_src_R13B04.orig/erts/emulator/beam/erl_init.c ./otp_src_R13B04/er
  
      early_init(&argc, argv);
  
-@@ -807,6 +808,9 @@
-     if (erts_sys_getenv("ERL_THREAD_POOL_SIZE", envbuf, &envbufsz) == 0) {
+@@ -820,6 +821,10 @@
  	async_max_threads = atoi(envbuf);
      }
+     
++    envbufsz = sizeof(envbuf);
 +    if (erts_sys_getenv("ERTS_DE_BUSY_LIMIT", envbuf, &envbufsz) == 0) {
 +	erts_de_busy_limit = atoi(envbuf);
-+    } 
-     
++    }
  
  #ifdef DEBUG
+     verbose = DEBUG_DEFAULT;
