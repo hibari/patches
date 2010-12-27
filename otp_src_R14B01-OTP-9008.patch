@@ -1,0 +1,122 @@
+--- ./otp_src_R14B01/lib/hipe/cerl/erl_bif_types.erl.orig
++++ ./otp_src_R14B01/lib/hipe/cerl/erl_bif_types.erl
+@@ -48,6 +48,7 @@
+ 		    t_boolean/0,
+ 		    t_byte/0,
+ 		    t_char/0,
++		    t_charlist/0,
+ 		    t_cons/0,
+ 		    t_cons/2,
+ 		    t_cons_hd/1,
+@@ -4517,11 +4518,11 @@ arg_types(os, timestamp, 0) ->
+ arg_types(re, compile, 1) ->
+   [t_iodata()];
+ arg_types(re, compile, 2) ->
+-  [t_iodata(), t_list(t_re_compile_option())];
++  [t_sup(t_iodata(), t_charlist()), t_list(t_re_compile_option())];
+ arg_types(re, run, 2) ->
+-  [t_iodata(), t_re_RE()];
++  [t_sup(t_iodata(), t_charlist()), t_re_RE()];
+ arg_types(re, run, 3) ->
+-  [t_iodata(), t_re_RE(), t_list(t_re_run_option())];
++  [t_sup(t_iodata(), t_charlist()), t_re_RE(), t_list(t_re_run_option())];
+ %%------- string --------------------------------------------------------------
+ arg_types(string, chars, 2) ->
+   [t_char(), t_non_neg_integer()];
+@@ -4978,8 +4979,7 @@ t_ets_info_items() ->
+ %% =====================================================================
+ 
+ t_prim_file_name() ->
+-   t_sup([t_string(),
+-	  t_binary()]).
++   t_sup(t_string(), t_binary()).
+ 
+ %% =====================================================================
+ %% These are used for the built-in functions of 'gen_tcp'
+@@ -5136,13 +5136,14 @@ t_re_MP() ->  %% it's supposed to be an opaque data type
+   t_tuple([t_atom('re_pattern'), t_integer(), t_integer(), t_binary()]).
+ 
+ t_re_RE() ->
+-  t_sup(t_re_MP(), t_iodata()).
++  t_sup([t_re_MP(), t_iodata(), t_charlist()]).
+ 
+ t_re_compile_option() ->
+-  t_sup([t_atoms(['anchored', 'caseless', 'dollar_endonly', 'dotall',
+-		  'extended', 'firstline', 'multiline', 'no_auto_capture',
+-		  'dupnames', 'ungreedy']),
+-	 t_tuple([t_atom('newline'), t_re_NLSpec()])]).
++  t_sup([t_atoms(['unicode', 'anchored', 'caseless', 'dollar_endonly',
++		  'dotall', 'extended', 'firstline', 'multiline',
++		  'no_auto_capture', 'dupnames', 'ungreedy']),
++	 t_tuple([t_atom('newline'), t_re_NLSpec()]),
++	 t_atoms(['bsr_anycrlf', 'bsr_unicode'])]).
+ 
+ t_re_run_option() ->
+   t_sup([t_atoms(['anchored', 'global', 'notbol', 'noteol', 'notempty']),
+@@ -5159,7 +5160,7 @@ t_re_Type() ->
+   t_atoms(['index', 'list', 'binary']).
+ 
+ t_re_NLSpec() ->
+-  t_atoms(['cr', 'crlf', 'lf', 'anycrlf']).
++  t_atoms(['cr', 'crlf', 'lf', 'anycrlf', 'any']).
+ 
+ t_re_ValueSpec() ->
+   t_sup(t_atoms(['all', 'all_but_first', 'first', 'none']), t_re_ValueList()).
+--- ./otp_src_R14B01/lib/hipe/cerl/erl_types.erl
++++ ./otp_src_R14B01/lib/hipe/cerl/erl_types.erl
+@@ -62,6 +62,7 @@
+ 	 t_boolean/0,
+ 	 t_byte/0,
+ 	 t_char/0,
++	 t_charlist/0,
+ 	 t_collect_vars/1,
+ 	 t_cons/0,
+ 	 t_cons/2,
+@@ -1455,6 +1456,21 @@ t_is_tuple(_) -> false.
+ %% Non-primitive types, including some handy syntactic sugar types
+ %%
+ 
++-spec t_charlist() -> erl_type().
++
++t_charlist() ->
++  t_charlist(1).
++
++-spec t_charlist(non_neg_integer()) -> erl_type().
++
++t_charlist(N) when N > 0 ->
++  t_maybe_improper_list(t_sup([t_unicode_char(),
++			       t_unicode_binary(),
++			       t_charlist(N-1)]),
++		        t_sup(t_unicode_binary(), t_nil()));
++t_charlist(0) ->
++  t_maybe_improper_list(t_any(), t_sup(t_unicode_binary(), t_nil())).
++
+ -spec t_constant() -> erl_type().
+ 
+ t_constant() ->
+@@ -1549,6 +1565,16 @@ t_parameterized_module() ->
+ t_timeout() ->
+   t_sup(t_non_neg_integer(), t_atom('infinity')).
+ 
++-spec t_unicode_binary() -> erl_type().
++
++t_unicode_binary() ->
++  t_binary().  % with characters encoded in UTF-8 coding standard
++
++-spec t_unicode_char() -> erl_type().
++
++t_unicode_char() ->
++  t_integer(). % representing a valid unicode codepoint
++
+ %%-----------------------------------------------------------------------------
+ %% Some built-in opaque types
+ %%
+@@ -2825,7 +2851,7 @@ t_subtract(?list(Contents1, Termination1, Size1) = T,
+ 	true ->
+ 	  case {Size1, Size2} of
+ 	    {?nonempty_qual, ?unknown_qual} -> ?none;
+-	    {?unknown_qual, ?nonempty_qual} -> Termination1;
++	    {?unknown_qual, ?nonempty_qual} -> ?nil;
+ 	    {S, S} -> ?none
+ 	  end;
+ 	false ->
